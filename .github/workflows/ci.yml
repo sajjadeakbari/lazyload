@@ -1,0 +1,52 @@
+name: CI - LazyLoad Plus
+
+on:
+  push:
+    branches: [ main, develop ] # یا هر شاخه اصلی دیگری که دارید
+  pull_request:
+    branches: [ main, develop ]
+
+jobs:
+  build_and_test:
+    name: Build, Lint & Test
+    runs-on: ubuntu-latest # یا windows-latest, macos-latest
+
+    strategy:
+      matrix:
+        node-version: [18.x, 20.x] # تست روی نسخه‌های مختلف Node.js
+
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+
+    - name: Setup Node.js ${{ matrix.node-version }}
+      uses: actions/setup-node@v4
+      with:
+        node-version: ${{ matrix.node-version }}
+        cache: 'npm' # فعال کردن کش برای npm
+
+    - name: Install dependencies
+      run: npm ci # استفاده از npm ci برای نصب دقیق وابستگی‌ها از package-lock.json
+
+    - name: Lint code
+      run: npm run lint
+
+    - name: Run tests
+      run: npm run test # این اسکریپت باید vitest run را اجرا کند
+
+    - name: Run type checks (tsd)
+      run: npm run test:types
+
+    - name: Build project
+      run: npm run build:prod
+
+    # مرحله اختیاری: آپلود آرتیفکت‌های build (پوشه dist)
+    # - name: Upload build artifacts
+    #   uses: actions/upload-artifact@v4
+    #   with:
+    #     name: dist-files-${{ matrix.node-version }}
+    #     path: dist/
+
+    # مرحله اختیاری: بررسی حجم باندل
+    - name: Check bundle size
+      run: npm run size
