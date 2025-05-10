@@ -1,5 +1,5 @@
 /*!
- * LazyLoad.js - JavaScript plugin for lazy loading images and other media
+ * LazyLoad Plus - JavaScript plugin for lazy loading images and other media
  *
  * Copyright (c) 2023-2025 Sajjad Akbari (sajjadakbari.ir)
  * Based on the original work by Mika Tuupola (2007-2019)
@@ -11,15 +11,19 @@
  *   https://github.com/sajjadeakbari/lazyload-plus
  *   https://sajjadakbari.ir
  *
- * Version: 4.2.0
+ * Version: 4.3.0
+ * __VERSION__  // This will be replaced by rollup-plugin-replace
  */
 
 (function (root, factory) {
     if (typeof define === 'function' && define.amd) {
+        // AMD. Register as an anonymous module.
         define([], factory);
     } else if (typeof exports === 'object' && typeof module !== 'undefined') {
+        // CommonJS (for Node.js or Browserify/Webpack)
         module.exports = factory();
     } else {
+        // Browser globals (root is window)
         root.LazyLoad = factory();
     }
 }(typeof global !== 'undefined' ? global : this.window || this.global, function () {
@@ -36,18 +40,26 @@
         class_loading: 'lazyloading',
         class_loaded: 'lazyloaded',
         class_error: 'lazyerror',
+        // IntersectionObserver settings
         root: null,
         rootMargin: '0px',
         threshold: 0,
+        // IntersectionObserver v2 settings (optional, browser-dependent)
+        track_visibility_v2: false, // Enable IOv2 visibility tracking if supported
+        delay_v2: 100,              // IOv2 specific delay for visibility calculation (ms)
+        // Behavior settings
         load_delay: 0,
         skip_invisible: false,
         retry_on_online: true,
         retry_backoff_base_ms: 1000, // Base delay for the first retry attempt (ms)
         retry_max_attempts: 5,       // Maximum number of automatic retry attempts
+        // Callbacks & Events
+        dispatch_events: false, // Dispatch custom events on elements
         callback_enter: null,
         callback_load: null,
         callback_error: null,
         callback_finish: null,
+        // Debug
         debug: false,
     };
 
@@ -71,9 +83,8 @@
     const _getAttribute = (element, attributeName) => element.getAttribute(attributeName);
     const _removeAttribute = (element, attributeName) => element.removeAttribute(attributeName);
 
-    // Helper to add class, wrapped in rAF if in browser
     const _addClass = (element, className) => {
-        if (!className) return;
+        if (!className || !element) return;
         if (IS_BROWSER) {
             window.requestAnimationFrame(() => {
                 element.classList.add(className);
@@ -83,9 +94,8 @@
         }
     };
 
-    // Helper to remove class, wrapped in rAF if in browser
     const _removeClass = (element, className) => {
-        if (!className) return;
+        if (!className || !element) return;
         if (IS_BROWSER) {
             window.requestAnimationFrame(() => {
                 element.classList.remove(className);
@@ -95,6 +105,15 @@
         }
     };
 
+    const _dispatchEvent = (element, eventName, detail = {}) => {
+        if (!IS_BROWSER || !element || typeof CustomEvent !== 'function') return;
+        // Ensure element is part of the detail for easy access
+        const eventDetail = { element, ...detail };
+        const event = new CustomEvent(eventName, { bubbles: true, cancelable: true, detail: eventDetail });
+        element.dispatchEvent(event);
+    };
+
+
     class LazyLoad {
         constructor(options = {}, elements) {
             this.settings = _extend({}, defaults, options);
@@ -102,12 +121,10 @@
             this._elementsToObserve = new Set();
             this._observedByIO = new Set();
             this._errorElements = new Set();
-            // Use WeakMap in browser for element keys to allow garbage collection if elements are removed from DOM
-            // Use Map as a fallback for non-browser environments (e.g., tests not fully mocking WeakMap or Node.js usage)
             this._retryData = IS_BROWSER && typeof WeakMap !== 'undefined' ? new WeakMap() : new Map();
             this._onlineHandler = null;
             
-            this._logDebug('Instance created with settings:', this.settings);
+            this._logDebug(`Instance created with settings:`, this.settings, `Version: ${typeof __VERSION__ !== 'undefined' ? __VERSION__ : 'N/A'}`);
             
             if (this.settings.retry_on_online) {
                 this._setupOnlineListener();
@@ -119,13 +136,13 @@
         }
 
         _logDebug(message, ...args) {
-            if (this.settings.debug) {
+            if (this.settings.debug && typeof console !== 'undefined') {
                 console.log('%c[LazyLoad DEBUG]', 'color: #4CAF50; font-weight: bold;', message, ...args);
             }
         }
 
         _isElementVisible(element) {
-            if (!IS_BROWSER || !element.getBoundingClientRect) return false;
+            if (!IS_BROWSER || !element || typeof element.getBoundingClientRect !== 'function') return false;
             const rect = element.getBoundingClientRect();
             return (
                 rect.top < window.innerHeight && rect.bottom > 0 &&
@@ -134,7 +151,7 @@
         }
 
         _setupOnlineListener() {
-            if (!IS_BROWSER) return;
+            if (!IS_BROWSER || !window.addEventListener) return;
             this._onlineHandler = () => {
                 this._logDebug('Browser came online. Evaluating failed elements for retry.');
                 this.retryFailedLoads();
@@ -144,7 +161,7 @@
         }
 
         _removeOnlineListener() {
-            if (!IS_BROWSER || !this._onlineHandler) return;
+            if (!IS_BROWSER || !this._onlineHandler || !window.removeEventListener) return;
             window.removeEventListener('online', this._onlineHandler);
             this._onlineHandler = null;
             this._logDebug('Online event listener removed.');
@@ -154,13 +171,11 @@
             const settings = this.settings;
             this._logDebug('Revealing element:', element);
             
-            if (typeof settings.callback_enter === 'function') {
-                settings.callback_enter(element);
-            }
+            if (typeof settings.callback_enter === 'function') settings.callback_enter(element);
+            if (settings.dispatch_events) _dispatchEvent(element, 'lazyload:enter');
 
             const actualLoad = () => {
                 this._logDebug('Starting actual load for:', element);
-                // Ensure error class is removed and element is removed from error set as we are attempting to load/retry
                 if (element.classList.contains(settings.class_error)) {
                     _removeClass(element, settings.class_error);
                 }
@@ -186,14 +201,16 @@
                         if (src) {
                             element.style.backgroundImage = `url("${src}")`;
                             _removeAttribute(element, settings.src);
+                        } else {
+                            this._logDebug('Element for background image has no data-src:', element);
                         }
-                        this._finishLoading(element, true); // Assume success for backgrounds
+                        this._finishLoading(element, !!src); // Success if src was present
                     };
                     if (IS_BROWSER) window.requestAnimationFrame(loadBgImage); else loadBgImage();
                 }
             };
 
-            if (settings.load_delay > 0 && IS_BROWSER) {
+            if (settings.load_delay > 0 && IS_BROWSER && typeof setTimeout === 'function') {
                 setTimeout(actualLoad, settings.load_delay);
             } else {
                 actualLoad();
@@ -202,21 +219,18 @@
         
         _loadImage(imgElement, src, srcset, sizes) {
             const settings = this.settings;
-            let hasFired = false; // Prevent multiple firings of finishLoading
+            let hasFired = false;
 
-            const onImageLoad = () => {
+            const completeLoad = (success, eventOrMessage) => {
                 if (hasFired) return; hasFired = true;
-                this._finishLoading(imgElement, true);
+                const error = success ? null : (eventOrMessage instanceof Event ? eventOrMessage : new Error(eventOrMessage || "Image failed to load"));
+                this._finishLoading(imgElement, success, error);
                 imgElement.removeEventListener('load', onImageLoad);
                 imgElement.removeEventListener('error', onImageError);
             };
 
-            const onImageError = (event) => {
-                if (hasFired) return; hasFired = true;
-                this._finishLoading(imgElement, false, event instanceof Event ? event : new Error(event || "Image failed to load"));
-                imgElement.removeEventListener('load', onImageLoad);
-                imgElement.removeEventListener('error', onImageError);
-            };
+            const onImageLoad = () => completeLoad(true, null);
+            const onImageError = (event) => completeLoad(false, event);
 
             imgElement.addEventListener('load', onImageLoad);
             imgElement.addEventListener('error', onImageError);
@@ -227,18 +241,12 @@
                 if (srcset) { imgElement.srcset = srcset; _removeAttribute(imgElement, settings.srcset); }
                 if (src) { imgElement.src = src; _removeAttribute(imgElement, settings.src); }
                 
-                // If, after attempting to set, the img still has no effective source, trigger an error.
-                // This check is crucial after attributes are applied.
-                // Browsers might clear src if srcset is valid, or vice-versa. Check final state.
-                // A more robust check might involve checking `imgElement.currentSrc` after a tick, but that's async.
-                // For simplicity, if both data-src and data-srcset were initially null/empty, it's an issue.
-                if (!src && !srcset) { // If no data attributes were provided to begin with
+                if (!src && !srcset) { // No data attributes were provided to begin with
                     this._logDebug('Img tag was provided with no data-src or data-srcset:', imgElement);
+                    // Directly call error handler as there's nothing to load
                     onImageError("Image has no source data (data-src or data-srcset)");
-                } else if (imgElement.getAttribute('src') === null && imgElement.getAttribute('srcset') === null && !imgElement.src && !imgElement.srcset) {
-                    // This case is harder to detect reliably without async checks like currentSrc
-                    // For now, rely on browser's own error event if src/srcset becomes invalid after processing.
                 }
+                // If src or srcset were set, the browser will attempt to load and fire 'load' or 'error'
             };
 
             if (IS_BROWSER) { window.requestAnimationFrame(applyImageAttributes); }
@@ -258,19 +266,19 @@
             const applyPictureAttributes = () => {
                 this._logDebug('Applying sources to <picture>:', pictureElement);
                 Array.from(pictureElement.querySelectorAll('source')).forEach(source => {
-                    const srcset = _getAttribute(source, settings.srcset);
-                    const sizes = _getAttribute(source, settings.sizes);
-                    const media = _getAttribute(source, 'data-media');
+                    const srcsetVal = _getAttribute(source, settings.srcset);
+                    const sizesVal = _getAttribute(source, settings.sizes);
+                    const mediaVal = _getAttribute(source, 'data-media');
 
-                    if (media) { source.media = media; _removeAttribute(source, 'data-media'); }
-                    if (sizes) { source.sizes = sizes; _removeAttribute(source, settings.sizes); }
-                    if (srcset) { source.srcset = srcset; _removeAttribute(source, settings.srcset); }
+                    if (mediaVal) { source.media = mediaVal; _removeAttribute(source, 'data-media'); }
+                    if (sizesVal) { source.sizes = sizesVal; _removeAttribute(source, settings.sizes); }
+                    if (srcsetVal) { source.srcset = srcsetVal; _removeAttribute(source, settings.srcset); }
                 });
                 
                 const imgSrc = _getAttribute(imgElement, settings.src);
                 const imgSrcset = _getAttribute(imgElement, settings.srcset);
                 const imgSizes = _getAttribute(imgElement, settings.sizes);
-                this._loadImage(imgElement, imgSrc, imgSrcset, imgSizes);
+                this._loadImage(imgElement, imgSrc, imgSrcset, imgSizes); // Delegate to _loadImage for the <img>
             };
 
             if (IS_BROWSER) { window.requestAnimationFrame(applyPictureAttributes); }
@@ -282,18 +290,15 @@
             this._logDebug('Loading <video> element:', videoElement, {poster});
             let hasFired = false;
             
-            const onCanPlay = () => {
+            const completeLoad = (success, event) => {
                 if (hasFired) return; hasFired = true;
-                this._finishLoading(videoElement, true);
+                this._finishLoading(videoElement, success, event);
                 videoElement.removeEventListener('canplaythrough', onCanPlay);
                 videoElement.removeEventListener('error', onError);
             };
-            const onError = (event) => {
-                if (hasFired) return; hasFired = true;
-                this._finishLoading(videoElement, false, event);
-                videoElement.removeEventListener('canplaythrough', onCanPlay);
-                videoElement.removeEventListener('error', onError);
-            };
+
+            const onCanPlay = () => completeLoad(true, null);
+            const onError = (event) => completeLoad(false, event);
 
             videoElement.addEventListener('canplaythrough', onCanPlay);
             videoElement.addEventListener('error', onError);
@@ -308,10 +313,10 @@
                 if (poster) { videoElement.poster = poster; _removeAttribute(videoElement, settings.poster); }
                 
                 if (hasVideoSources) {
-                    videoElement.load();
+                    videoElement.load(); // Tell browser to load the sources
                 } else {
                     this._logDebug('Video tag has no source elements with data-src:', videoElement);
-                    onError(new Error("Video has no sources"));
+                    onError(new Error("Video has no valid sources")); // Trigger error if no sources found
                 }
             };
             
@@ -328,6 +333,7 @@
                 if (hasFired) return; hasFired = true;
                 this._finishLoading(iframeElement, true);
                 iframeElement.removeEventListener('load', onIframeLoad);
+                // Note: iframe 'error' event is unreliable for src loading issues
             };
             
             iframeElement.addEventListener('load', onIframeLoad);
@@ -337,8 +343,8 @@
                     iframeElement.src = src;
                     _removeAttribute(iframeElement, settings.src);
                 } else {
-                    if (hasFired) return; hasFired = true;
-                    this._logDebug('Iframe tag has no src to load:', iframeElement);
+                    if (hasFired) return; hasFired = true; // Prevent multiple calls to _finishLoading
+                    this._logDebug('Iframe tag has no src (from data-src) to load:', iframeElement);
                     this._finishLoading(iframeElement, false, new Error("Iframe has no source (data-src)"));
                     iframeElement.removeEventListener('load', onIframeLoad); // Clean up if erroring early
                 }
@@ -350,8 +356,9 @@
         
         _finishLoading(element, success, errorEvent = null) {
             const settings = this.settings;
-            // Ensure class changes happen in next frame to be consistent
-            const performClassChanges = () => {
+            const eventDetail = success ? {} : { error: errorEvent instanceof Error ? errorEvent.message : (errorEvent ? String(errorEvent.type || errorEvent) : 'Unknown error') };
+            
+            const performFinishActions = () => {
                 _removeClass(element, settings.class_loading);
                 if (success) {
                     _addClass(element, settings.class_loaded);
@@ -359,14 +366,17 @@
                     this._retryData.delete(element);
                     this._logDebug('Successfully loaded:', element);
                     if (typeof settings.callback_load === 'function') settings.callback_load(element);
+                    if (settings.dispatch_events) _dispatchEvent(element, 'lazyload:load');
                 } else {
                     _addClass(element, settings.class_error);
                     this._errorElements.add(element);
-                    let retryInfo = this._retryData.get(element) || { count: 0, nextAttemptAt: 0 };
-                    this._logDebug('Error loading element:', element, 'Error Details:', errorEvent, 'Retry info:', retryInfo);
+                    // Retry data (count, nextAttemptAt) is managed/updated in retryFailedLoads
+                    this._logDebug('Error loading element:', element, 'Error Details:', errorEvent);
                     if (typeof settings.callback_error === 'function') settings.callback_error(element, errorEvent);
+                    if (settings.dispatch_events) _dispatchEvent(element, 'lazyload:error', eventDetail);
                 }
                 if (typeof settings.callback_finish === 'function') settings.callback_finish(element);
+                if (settings.dispatch_events) _dispatchEvent(element, 'lazyload:finish', eventDetail);
 
                 _removeAttribute(element, settings.src);
                 _removeAttribute(element, settings.srcset);
@@ -374,7 +384,8 @@
                 _removeAttribute(element, settings.poster);
                 _removeAttribute(element, 'data-media');
             };
-            if(IS_BROWSER) window.requestAnimationFrame(performClassChanges); else performClassChanges();
+
+            if(IS_BROWSER) window.requestAnimationFrame(performFinishActions); else performFinishActions();
         }
 
         init() {
@@ -386,41 +397,61 @@
             
             const settings = this.settings;
             
-            if (!IS_BROWSER || !window.IntersectionObserver) {
+            if (!IS_BROWSER || typeof window.IntersectionObserver !== 'function') {
                 this._logDebug('IntersectionObserver not supported or not in a browser environment. Loading all elements now.');
                 this.loadAllNow();
                 return;
             }
             
-            this._observer = new IntersectionObserver((entries) => { // Removed 'observer' param as it's not used
+            const observerOptions = {
+                root: settings.root,
+                rootMargin: settings.rootMargin,
+                threshold: settings.threshold,
+            };
+
+            if (settings.track_visibility_v2 && 'isVisible' in IntersectionObserverEntry.prototype) {
+                observerOptions.trackVisibility = true;
+                observerOptions.delay = parseInt(String(settings.delay_v2), 10) || 100;
+                this._logDebug('IntersectionObserver v2 features (trackVisibility, delay) enabled with delay:', observerOptions.delay);
+            } else if (settings.track_visibility_v2) {
+                this._logDebug('IntersectionObserver v2 (track_visibility_v2) requested but not supported by browser.');
+            }
+            
+            this._observer = new IntersectionObserver((entries) => {
                 entries.forEach(entry => {
                     const targetElement = entry.target;
                     if (!this._elementsToObserve.has(targetElement) && !this._observedByIO.has(targetElement)) {
-                        if(this._observer) this._observer.unobserve(targetElement); // Ensure unobserve if observer still exists
+                        if(this._observer) this._observer.unobserve(targetElement);
                         this._observedByIO.delete(targetElement);
                         return;
                     }
 
-                    if (entry.isIntersecting || (settings.skip_invisible && this._isElementVisible(targetElement)) ) {
-                        this._logDebug('Element is intersecting or skip_invisible allows:', targetElement);
+                    let isEffectivelyIntersecting = entry.isIntersecting;
+                    if (observerOptions.trackVisibility && 'isVisible' in entry) { // Check if v2 features were active
+                        if (entry.isIntersecting && !entry.isVisible) {
+                            this._logDebug('Element intersected but is not "visible" (IOv2):', targetElement);
+                            isEffectivelyIntersecting = false;
+                        } else if (entry.isVisible) { // If IOv2 says it's visible, trust it
+                            isEffectivelyIntersecting = true;
+                        }
+                    }
+                    
+                    if (isEffectivelyIntersecting || (settings.skip_invisible && this._isElementVisible(targetElement))) {
+                        this._logDebug('Element is effectively intersecting or skip_invisible allows:', targetElement);
                         if(this._observer) this._observer.unobserve(targetElement);
                         this._observedByIO.delete(targetElement);
                         this._elementsToObserve.delete(targetElement);
                         this._revealElement(targetElement);
                     }
                 });
-            }, {
-                root: settings.root,
-                rootMargin: settings.rootMargin,
-                threshold: settings.threshold
-            });
+            }, observerOptions);
 
             this._logDebug(`Attempting to observe ${this._elementsToObserve.size} elements in queue.`);
             this._elementsToObserve.forEach(element => {
                 if (!this._observedByIO.has(element)) {
                     if (settings.skip_invisible && this._isElementVisible(element)) {
                         this._logDebug('Element already visible (skip_invisible), revealing immediately:', element);
-                        this._elementsToObserve.delete(element); // Remove from queue as it's processed
+                        this._elementsToObserve.delete(element);
                         this._revealElement(element);
                     } else {
                         if(this._observer) this._observer.observe(element);
@@ -436,47 +467,53 @@
             const elementsArray = NodeList.prototype.isPrototypeOf(elementsToAdd) ? Array.from(elementsToAdd) :
                                   Array.isArray(elementsToAdd) ? elementsToAdd : [elementsToAdd];
 
-            let newElementsCount = 0;
+            let newElementsAddedCount = 0;
+            let reQueuedErrorCount = 0;
+
             elementsArray.forEach(element => {
-                const isAlreadyProcessed = element.classList.contains(this.settings.class_loaded) ||
-                                         (element.classList.contains(this.settings.class_error) && this._errorElements.has(element)); // Check if it's an error we are already tracking for retry
+                if (!(element instanceof HTMLElement)) return;
 
-                if (element instanceof HTMLElement &&
-                    !this._elementsToObserve.has(element) &&
+                const isLoaded = element.classList.contains(this.settings.class_loaded);
+                const isKnownError = this._errorElements.has(element); // Error tracked by this instance
+                const hasErrorClass = element.classList.contains(this.settings.class_error);
+
+                // Conditions to add to _elementsToObserve:
+                // 1. Not already in the queue for observation.
+                // 2. Not currently being watched by the IntersectionObserver instance.
+                // 3. Not already successfully loaded.
+                // 4. Not an error that this instance is already tracking (retryFailedLoads handles these).
+                if (!this._elementsToObserve.has(element) &&
                     !this._observedByIO.has(element) &&
-                    !isAlreadyProcessed) {
+                    !isLoaded &&
+                    !isKnownError) {
                     
-                    // If it has an error class but not in our _errorElements, it might be an old error.
-                    // We'll clear the class and let it be re-evaluated.
-                    if (element.classList.contains(this.settings.class_error)) {
+                    // If it has an error class but not tracked by this instance, it's an old/external error.
+                    // Clean it and prepare for a new observation attempt.
+                    if (hasErrorClass) {
                         _removeClass(element, this.settings.class_error);
+                        reQueuedErrorCount++;
                     }
-
                     this._elementsToObserve.add(element);
-                    newElementsCount++;
+                    newElementsAddedCount++;
                 }
             });
 
-            if (newElementsCount > 0) {
-                this._logDebug(`Added/Re-queued ${newElementsCount} elements.`);
-                // If observer is active, new elements need to be observed or processed
-                // If not active (e.g. IO not supported), init() or loadAllNow() will handle them.
+            if (newElementsAddedCount > 0) {
+                this._logDebug(`Added ${newElementsAddedCount - reQueuedErrorCount} new elements. Re-queued ${reQueuedErrorCount} elements with previous errors.`);
                 if (this._observer) {
                     this._elementsToObserve.forEach(element => {
-                        if (!this._observedByIO.has(element)) { // Only act on elements not yet handed to the IO
+                        if (!this._observedByIO.has(element)) {
                              if (this.settings.skip_invisible && this._isElementVisible(element)) {
                                 this._logDebug('Newly added/re-queued element already visible, revealing immediately:', element);
+                                this._elementsToObserve.delete(element); // Processed, remove from queue
                                 this._revealElement(element);
-                                this._elementsToObserve.delete(element); // Remove from queue as it's processed
                             } else {
                                 this._observer.observe(element);
                                 this._observedByIO.add(element);
                             }
                         }
                     });
-                } else if (IS_BROWSER && window.IntersectionObserver && this._elementsToObserve.size > 0) {
-                    // If observer wasn't initialized (e.g. no elements on first run, or IO not supported previously)
-                    // and now we have elements and IO support, initialize.
+                } else if (IS_BROWSER && typeof window.IntersectionObserver === 'function' && this._elementsToObserve.size > 0) {
                     this.init();
                 }
             }
@@ -487,7 +524,6 @@
             
             const elementsToActuallyRetryNow = [];
             const now = Date.now();
-            // let minNextDelay = Infinity; // Not used for now, as we don't auto-reschedule
 
             this._logDebug(`Evaluating ${this._errorElements.size} elements for retry (max attempts: ${this.settings.retry_max_attempts}).`);
 
@@ -503,34 +539,31 @@
 
                 if (retryInfo.count >= this.settings.retry_max_attempts) {
                     this._logDebug('Max retry attempts reached for element:', element, `Attempt count: ${retryInfo.count}`);
-                    // Element remains in _errorElements to signify it's permanently failed for this instance's auto-retry logic
-                    return;
+                    return; // Element remains in _errorElements, no further auto-retries
                 }
 
                 if (now < retryInfo.nextAttemptAt) {
                     const remainingDelay = retryInfo.nextAttemptAt - now;
                     this._logDebug(`Element ${element.tagName} is in backoff. Next attempt in ${remainingDelay}ms.`);
-                    // Element remains in _errorElements, will be checked on next call or online event
-                    return;
+                    return; // Element remains in _errorElements, will be checked on next call
                 }
 
-                // Qualified for retry attempt
                 this._logDebug(`Element ${element.tagName} qualifies for retry attempt #${retryInfo.count + 1}.`);
-                this._errorElements.delete(element); // Remove from current error set as we are attempting
-                // _removeClass is handled in _revealElement
+                // We don't remove from _errorElements here; _revealElement will do it upon starting the load.
+                // _removeClass(element, this.settings.class_error) is also handled by _revealElement.
                 
                 elementsToActuallyRetryNow.push(element);
 
                 retryInfo.count++;
-                // Calculate delay for the *next* attempt if *this* one also fails
-                const backoffDelayForNext = this.settings.retry_backoff_base_ms * (2 ** (retryInfo.count -1)); // count is already incremented
+                const backoffDelayForNext = this.settings.retry_backoff_base_ms * (2 ** (retryInfo.count - 1));
                 retryInfo.nextAttemptAt = now + backoffDelayForNext;
                 this._retryData.set(element, retryInfo);
             });
 
             if (elementsToActuallyRetryNow.length > 0) {
                 this._logDebug(`Re-queuing ${elementsToActuallyRetryNow.length} elements for immediate loading attempt.`);
-                // These elements will go through _revealElement, which clears class_error and _errorElements set again
+                // These elements will go through the normal observation flow again via addElements -> init/observe -> _revealElement
+                // _revealElement will handle removing class_error and from _errorElements set.
                 this.addElements(elementsToActuallyRetryNow);
             } else {
                  this._logDebug('No elements were eligible for immediate retry (all in backoff or max attempts reached).');
@@ -539,10 +572,9 @@
         
         loadAllNow() {
             this._logDebug('loadAllNow called. Processing all queued elements.');
-            const elementsToProcessImmediately = Array.from(this._elementsToObserve); // Iterate over a copy
+            const elementsToProcessImmediately = Array.from(this._elementsToObserve);
             elementsToProcessImmediately.forEach(element => {
-                // Check if still in queue, as _revealElement modifies the set
-                if (this._elementsToObserve.has(element)) {
+                if (this._elementsToObserve.has(element)) { // Check if still in queue
                     if (this._observer && this._observedByIO.has(element)) {
                          this._observer.unobserve(element);
                          this._observedByIO.delete(element);
@@ -561,12 +593,7 @@
             this._elementsToObserve.clear();
             this._observedByIO.clear();
             this._errorElements.clear();
-            // For _retryData (WeakMap), entries for elements no longer relevant will be GC'd.
-            // If it were a Map, we might need to selectively clear it or clear it entirely.
-            // Since it's a WeakMap, direct clearing of all entries isn't standard.
-            // Re-instantiating it is one way if a full reset of retry state is desired on update.
             this._retryData = IS_BROWSER && typeof WeakMap !== 'undefined' ? new WeakMap() : new Map();
-
 
             const elementsToProcess = newElements || (IS_BROWSER ? Array.from(window.document.querySelectorAll(this.settings.elements_selector)) : []);
             this.addElements(elementsToProcess);
@@ -588,18 +615,17 @@
             this._elementsToObserve.clear();
             this._observedByIO.clear();
             this._errorElements.clear();
-            this._retryData = IS_BROWSER && typeof WeakMap !== 'undefined' ? new WeakMap() : new Map(); // Reset retry data
+            this._retryData = IS_BROWSER && typeof WeakMap !== 'undefined' ? new WeakMap() : new Map();
         }
     }
 
     // jQuery plugin wrapper
-    if (IS_BROWSER && window.jQuery) {
+    if (IS_BROWSER && typeof window.jQuery === 'function') {
         const $ = window.jQuery;
         const JQ_INSTANCE_KEY = 'sajjadAkbariLazyLoadInstance';
 
         $.fn.lazyload = function (optionsOrMethod) {
-            // ... (کد پلاگین jQuery بدون تغییر باقی می‌ماند)
-             if (typeof optionsOrMethod === 'string') {
+            if (typeof optionsOrMethod === 'string') {
                 const methodName = optionsOrMethod;
                 const args = Array.prototype.slice.call(arguments, 1);
                 let returnValue = this;
@@ -621,20 +647,13 @@
             } else {
                 const elements = this.toArray();
                 if (elements.length > 0) {
-                    // Check if an instance is already associated with the *first* element of the collection.
-                    // This assumes one LazyLoad instance manages the group.
                     let groupInstance = $(elements[0]).data(JQ_INSTANCE_KEY);
                     if (groupInstance) {
-                        // If instance exists, update it with the current set of elements
                         groupInstance.addElements(elements);
-                        // Ensure all elements in the current jQuery collection point to this instance if needed,
-                        // though typically only the first element might hold the primary reference.
-                        // For simplicity, we assume the first element's instance is the group's instance.
                          if (groupInstance.settings.debug) console.log('[LazyLoad jQuery] Added elements to existing instance for group starting with:', elements[0]);
                     } else {
                         groupInstance = new LazyLoad(optionsOrMethod, elements);
-                        // Store the instance on the first element of the collection.
-                        $(elements[0]).data(JQ_INSTANCE_KEY, groupInstance);
+                        $(elements[0]).data(JQ_INSTANCE_KEY, groupInstance); // Store instance on the first element
                          if (groupInstance.settings.debug) console.log('[LazyLoad jQuery] Created new instance for elements starting with:', elements[0]);
                     }
                 }
