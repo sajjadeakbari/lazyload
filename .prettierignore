@@ -1,16 +1,17 @@
-# Ignore artifacts:
+# Build outputs
 dist/
 coverage/
 docs/
 bundle-analysis/
+
+# Dependencies
 node_modules/
 
-# Ignore files that are not meant to be formatted
-CHANGELOG.md # Usually generated, formatting might break its structure
+# Generated files that should not be formatted
+CHANGELOG.md
 LICENSE
+
+# Lockfiles
 package-lock.json
 yarn.lock
 pnpm-lock.yaml
-
-# Specific files (if any)
-# src/some-vendored-script.js
