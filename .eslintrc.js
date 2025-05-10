@@ -1,45 +1,45 @@
 // .eslintrc.js
 module.exports = {
+  root: true, // مهم: ESLint از جستجوی فایل‌های کانفیگ در پوشه‌های والد جلوگیری می‌کند
   env: {
-    browser: true, // متغیرهای گلوبال مرورگر
-    es2021: true, // فعال کردن ویژگی‌های ES2021 (مانند globalThis)
-    node: true, // متغیرهای گلوبال Node.js و scope (برای فایل‌های کانفیگ و اسکریپت‌ها)
-    // 'vitest-globals/env': true, // اگر از Vitest استفاده می‌کنید و می‌خواهید گلوبال‌های آن را بشناسد
+    browser: true,
+    es2021: true,
+    node: true, // برای فایل‌های کانفیگ و اسکریپت‌ها
+    'vitest-globals/env': true, // فعال کردن گلوبال‌های Vitest
   },
   extends: [
-    'eslint:recommended', // قوانین پیشنهادی ESLint
-    'plugin:import/recommended', // قوانین برای import/export
-    // 'plugin:vitest-globals/recommended', // اگر از Vitest استفاده می‌کنید
-    'prettier', // خاموش کردن قوانینی که با Prettier تداخل دارند (باید آخرین extends باشد)
+    'eslint:recommended',
+    'plugin:import/recommended',
+    'plugin:vitest-globals/recommended', // استفاده از قوانین پیشنهادی Vitest globals
+    'prettier', // همیشه آخر برای override کردن قوانین استایلینگ ESLint
   ],
   parserOptions: {
-    ecmaVersion: 'latest', // استفاده از آخرین نسخه ECMAScript
-    sourceType: 'module', // کد شما از ماژول‌های ES استفاده می‌کند
+    ecmaVersion: 'latest',
+    sourceType: 'module',
   },
   plugins: [
-    'import', // پلاگین برای lint کردن import/export
-    // 'vitest', // اگر از Vitest استفاده می‌کنید
-    'prettier', // اجرای Prettier به عنوان یک قانون ESLint (اختیاری، اما مفید)
+    'import',
+    'vitest', // پلاگین Vitest (اگر قوانین خاص بیشتری از آن می‌خواهید)
+    'prettier'
   ],
   rules: {
-    'prettier/prettier': 'warn', // نمایش هشدارهای Prettier به عنوان خطاهای ESLint (یا 'error' برای خطا)
+    'prettier/prettier': 'warn', // نمایش هشدارهای Prettier به عنوان هشدارهای ESLint
 
-    // === ESLint Best Practices & Overrides ===
-    'no-unused-vars': ['warn', { argsIgnorePattern: '^_', varsIgnorePattern: '^_' }], // هشدار برای متغیرهای استفاده نشده (با _ شروع شوند نادیده گرفته می‌شوند)
-    'no-console': process.env.NODE_ENV === 'production' ? 'warn' : 'off', // هشدار برای console.log در production
-    'no-debugger': process.env.NODE_ENV === 'production' ? 'warn' : 'off', // هشدار برای debugger در production
-    'eqeqeq': ['error', 'always'], // همیشه از === و !== استفاده شود
-    'curly': ['error', 'multi-line'], // براکت‌ها برای بلوک‌های چند خطی الزامی است
+    'no-unused-vars': ['warn', { argsIgnorePattern: '^_', varsIgnorePattern: '^_' }],
+    'no-console': process.env.NODE_ENV === 'production' ? ['warn', { allow: ['warn', 'error'] }] : 'off', // در production فقط warn و error مجاز است
+    'no-debugger': process.env.NODE_ENV === 'production' ? 'warn' : 'off',
+    eqeqeq: ['error', 'always', { null: 'ignore' }], // همیشه === مگر برای null
+    curly: ['warn', 'multi-line', 'consistent'],
 
-    // === Import Plugin Rules ===
     'import/order': [
       'warn',
       {
-        groups: ['builtin', 'external', 'internal', ['parent', 'sibling', 'index']],
+        groups: ['builtin', 'external', 'internal', 'parent', 'sibling', 'index', 'object', 'type'],
         pathGroups: [
           {
             pattern: '@/**',
             group: 'internal',
+            position: 'before',
           },
         ],
         pathGroupsExcludedImportTypes: ['builtin'],
@@ -50,30 +50,40 @@ module.exports = {
         },
       },
     ],
-    'import/no-unresolved': 'off', // اگر از alias ها یا موارد خاصی استفاده می‌کنید، شاید نیاز به تنظیمات resolver یا خاموش کردن این قانون باشد
-    'import/prefer-default-export': 'off', // اجازه به named export ها بدون نیاز به default export
-
-    // می‌توانید قوانین بیشتری را بر اساس نیاز خود اضافه یا تغییر دهید
+    'import/no-unresolved': 'off', // برای سادگی فعلاً خاموش، با alias ها نیاز به تنظیمات resolver دارد
+    'import/prefer-default-export': 'off',
+    
+    // Vitest specific rules (optional, if you use eslint-plugin-vitest)
+    // 'vitest/no-disabled-tests': 'warn',
+    // 'vitest/no-focused-tests': 'warn',
+    // 'vitest/expect-expect': 'error',
   },
   settings: {
     'import/resolver': {
       node: {
-        extensions: ['.js', '.mjs'], // پسوندهایی که import resolver باید بررسی کند
+        extensions: ['.js', '.mjs'],
       },
-      // می‌توانید resolver های دیگری برای alias ها اضافه کنید (مثلاً با eslint-import-resolver-alias)
     },
   },
-  overrides: [ // تنظیمات خاص برای فایل‌های تست
+  overrides: [
     {
-      files: ['**/tests/**/*.js', '**/*.test.js'],
+      files: ['**/tests/**/*.js', '**/*.test.js', '**/*.spec.js'],
       env: {
-        // node: true, // اگر تست‌ها در محیط Node اجرا می‌شوند (که معمولاً با Vitest/Jest همینطور است)
-        // jest: true, // اگر از Jest استفاده می‌کنید
-        // 'vitest-globals/env': true, // اگر از Vitest استفاده می‌کنید
+        'vitest-globals/env': true, // اطمینان از فعال بودن برای فایل‌های تست
+         node: true, // تست‌ها در محیط Node اجرا می‌شوند
       },
-      // rules: { // قوانین خاص برای فایل‌های تست
-      //   'no-undef': 'off', // برای گلوبال‌های تست مانند describe, it
+      // rules: {
+      //   // Specific rules for test files if needed
       // }
+    },
+    {
+      // برای فایل‌های کانفیگ در ریشه پروژه و اسکریپت‌ها
+      files: ['./*.js', './*.mjs', './scripts/**/*.js'],
+      env: { node: true, browser: false, es2021: true },
+      parserOptions: { sourceType: 'script' }, // برخی فایل‌های کانفیگ ممکن است ماژول نباشند
+      rules: {
+        'import/order': 'off', // ممکن است در فایل‌های کانفیگ ترتیب import مهم نباشد
+      }
     }
-  ]
+  ],
 };
