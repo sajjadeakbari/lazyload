@@ -9,25 +9,3 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 Changelog entries are typically added by the auto-changelog tool.
 Manually add entries here if needed, following the format below.
 -->
-
-<!--
-## [Unreleased]
-
-### Added
-- ...
-
-### Changed
-- ...
-
-### Deprecated
-- ...
-
-### Removed
-- ...
-
-### Fixed
-- ...
-
-### Security
-- ...
--->
