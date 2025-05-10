@@ -1,0 +1,151 @@
+{
+  "name": "lazyload-plus",
+  "version": "4.0.3",
+  "description": "A lightweight, flexible and high-performance JavaScript plugin for lazy loading images, videos, iframes, and background images.",
+  "main": "dist/lazyload-plus.umd.js",
+  "module": "dist/lazyload-plus.esm.js",
+  "browser": "dist/lazyload-plus.min.js",
+  "types": "types/index.d.ts",
+  "exports": {
+    ".": {
+      "import": "./dist/lazyload-plus.esm.js",
+      "require": "./dist/lazyload-plus.umd.js",
+      "browser": "./dist/lazyload-plus.min.js",
+      "types": "./types/index.d.ts"
+    },
+    "./package.json": "./package.json"
+  },
+  "sideEffects": false,
+  "scripts": {
+    "dev": "rollup -c -w",
+    "build": "rollup -c",
+    "build:prod": "cross-env NODE_ENV=production rollup -c",
+    "lint": "eslint src/**/*.js tests/**/*.js rollup.config.js",
+    "lint:fix": "eslint src/**/*.js tests/**/*.js rollup.config.js --fix",
+    "prettier": "prettier --check \"**/*.{js,json,md,ts,html,css,yml}\"",
+    "prettier:fix": "prettier --write \"**/*.{js,json,md,ts,html,css,yml}\"",
+    "test": "vitest run",
+    "test:watch": "vitest watch",
+    "test:coverage": "vitest run --coverage",
+    "test:types": "tsd",
+    "docs:generate": "typedoc --out docs src/LazyLoad.js --entryPointStrategy expand ./types/index.d.ts --readme README.md --name \"LazyLoad Plus Documentation\"",
+    "docs:serve": "npx http-server docs -o",
+    "size": "size-limit",
+    "size:why": "size-limit --why",
+    "changelog": "auto-changelog --package --template keepachangelog --commit-limit false -u --sort-commits date-desc",
+    "release": "npm run lint && npm run test && npm run test:types && npm run build:prod && npm run size && npm run changelog && echo 'Ready to publish!'",
+    "prepublishOnly": "npm run release"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/sajjadeakbari/lazyload-plus.git"
+  },
+  "keywords": [
+    "lazyload",
+    "lazy-load",
+    "lazy loading",
+    "images",
+    "video",
+    "iframe",
+    "background",
+    "performance",
+    "vanilla-js",
+    "javascript",
+    "intersectionobserver",
+    "seo",
+    "lightweight",
+    "picture element",
+    "responsive images"
+  ],
+  "author": {
+    "name": "Sajjad Akbari",
+    "email": "sajjad.akbari.dev@gmail.com",
+    "url": "https://sajjadakbari.ir"
+  },
+  "license": "MIT",
+  "bugs": {
+    "url": "https://github.com/sajjadeakbari/lazyload-plus/issues"
+  },
+  "homepage": "https://github.com/sajjadeakbari/lazyload-plus#readme",
+  "funding": [
+    {
+      "type": "github",
+      "url": "https://github.com/sponsors/sajjadeakbari"
+    },
+    {
+      "type": "paypal",
+      "url": "https://paypal.me/sajjadeakbari"
+    }
+  ],
+  "files": [
+    "dist",
+    "src",
+    "types",
+    "LICENSE",
+    "README.md",
+    "CHANGELOG.md"
+  ],
+  "browserslist": {
+    "production": [
+      ">0.3%",
+      "last 2 versions",
+      "Firefox ESR",
+      "not dead",
+      "not op_mini all",
+      "not ie 11",
+      "not kaios > 0"
+    ],
+    "development": [
+      "last 1 chrome version",
+      "last 1 firefox version",
+      "last 1 safari version",
+      "last 1 edge version"
+    ]
+  },
+  "size-limit": [
+    {
+      "path": "dist/lazyload-plus.min.js",
+      "limit": "5 kB",
+      "brotli": true,
+      "gzip": true
+    },
+    {
+      "path": "dist/lazyload-plus.esm.js",
+      "limit": "6 kB",
+      "brotli": true,
+      "gzip": true
+    }
+  ],
+  "devDependencies": {
+    "@babel/core": "^7.23.9",
+    "@babel/preset-env": "^7.23.9",
+    "@rollup/plugin-babel": "^6.0.4",
+    "@rollup/plugin-commonjs": "^25.0.7",
+    "@rollup/plugin-node-resolve": "^15.2.3",
+    "@rollup/plugin-terser": "^0.4.4",
+    "@size-limit/preset-small-lib": "^11.0.2",
+    "@vitest/coverage-v8": "^1.2.2",
+    "auto-changelog": "^2.4.0",
+    "cross-env": "^7.0.3",
+    "eslint": "^8.56.0",
+    "eslint-config-prettier": "^9.1.0",
+    "eslint-plugin-import": "^2.29.1",
+    "eslint-plugin-prettier": "^5.1.3",
+    "http-server": "^14.1.1",
+    "jsdom": "^24.0.0",
+    "prettier": "^3.2.5",
+    "rollup": "^4.9.6",
+    "size-limit": "^11.0.2",
+    "tsd": "^0.30.7",
+    "typedoc": "^0.25.7",
+    "typescript": "^5.3.3",
+    "vitest": "^1.2.2"
+  },
+  "engines": {
+    "node": ">=18.12.0",
+    "npm": ">=8.19.0"
+  },
+  "publishConfig": {
+    "access": "public"
+  }
+}
